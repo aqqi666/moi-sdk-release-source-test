@@ -1,0 +1,94 @@
+name: Release Product SDKs
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Full MOI commit SHA to export. This checkout is never modified.'
+        required: true
+        type: string
+      product_version:
+        description: 'Compatible MOI product version recorded in Release metadata (x.y.z).'
+        required: true
+        type: string
+      python_repository:
+        description: 'Target Python repository in owner/name form.'
+        required: true
+        type: string
+      go_repository:
+        description: 'Target Go repository in owner/name form. Its public Go module path is derived from this value.'
+        required: true
+        type: string
+      go_version:
+        description: 'Go SDK release version without v (x.y.z).'
+        required: true
+        type: string
+      python_release_notes:
+        description: 'Optional complete GitHub Release body. Empty generates notes from MOI changes since the previous export.'
+        required: false
+        type: string
+      go_release_notes:
+        description: 'Optional complete GitHub Release body. Empty generates notes from MOI changes since the previous export.'
+        required: false
+        type: string
+      dry_run:
+        description: 'Validate exports and target state without writing branches, tags, Releases, or packages.'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-product-sdks-${{ inputs.python_repository }}-${{ inputs.go_repository }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout pinned MOI source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          sparse-checkout: |
+            .github
+            sdk
+            docs/iam
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: sdk/go-sdk/go.mod
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Configure target Git operations
+        env:
+          GH_TOKEN: ${{ secrets.SDK_PUBLISH_TOKEN }}
+        run: gh auth setup-git
+      - name: Validate and release SDKs
+        env:
+          GH_TOKEN: ${{ secrets.SDK_PUBLISH_TOKEN }}
+          PYTHON_RELEASE_NOTES: ${{ inputs.python_release_notes }}
+          GO_RELEASE_NOTES: ${{ inputs.go_release_notes }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          arguments=(
+            --source-root "$GITHUB_WORKSPACE"
+            --source-repository "$GITHUB_REPOSITORY"
+            --source-sha "${{ inputs.source_sha }}"
+            --product-version "${{ inputs.product_version }}"
+            --python-repository "${{ inputs.python_repository }}"
+            --go-repository "${{ inputs.go_repository }}"
+            --go-version "${{ inputs.go_version }}"
+            --work-dir "$RUNNER_TEMP/sdk-release"
+          )
+          if [[ "$DRY_RUN" == "true" ]]; then
+            arguments+=(--dry-run)
+          fi
+          python3 .github/scripts/release_product_sdks.py publish "${arguments[@]}"
