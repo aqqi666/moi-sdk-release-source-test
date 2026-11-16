@@ -388,3 +388,7 @@ compatibility fallback.
 The route returns a streamed CSV response. The calling Go HTTP client owns
 `response.Body` and must consume and close it. This repository change does not
 add a Go SDK method, modify SDK version metadata, or publish a package.
+
+## Release train validation
+
+Documentation-only change for the v0.1.1 sandbox release.

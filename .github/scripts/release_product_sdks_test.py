@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 from release_product_sdks import (
     Baseline,
@@ -18,6 +19,7 @@ from release_product_sdks import (
     parse_metadata,
     release_commit_message,
     replace_target_tree,
+    wait_for_ci,
 )
 
 
@@ -208,6 +210,35 @@ class ReleaseNotesTest(unittest.TestCase):
         self.assertEqual(self.source_sha, metadata.source_sha)
         self.assertEqual("0.2.0", metadata.version)
         self.assertEqual("5.2.3", metadata.product_version)
+
+
+class CiGateTest(unittest.TestCase):
+    class GitHub:
+        def __init__(self, responses: list[list[dict]]) -> None:
+            self.responses = iter(responses)
+            self.calls = 0
+
+        def api(self, path: str) -> dict:
+            self.calls += 1
+            return {"check_runs": next(self.responses)}
+
+    def test_waits_for_sdk_ci_then_allows_merge(self) -> None:
+        github = self.GitHub([
+            [],
+            [{"name": "sdk-ci", "status": "in_progress", "conclusion": None}],
+            [{"name": "sdk-ci", "status": "completed", "conclusion": "success"}],
+        ])
+        with mock.patch("release_product_sdks.time.sleep") as sleep:
+            wait_for_ci(github, "example/moi-go-sdk", "abc123")
+        self.assertEqual(3, github.calls)
+        self.assertEqual(2, sleep.call_count)
+
+    def test_failed_sdk_ci_blocks_release(self) -> None:
+        github = self.GitHub([
+            [{"name": "sdk-ci", "status": "completed", "conclusion": "failure", "html_url": "https://example.test/check"}],
+        ])
+        with self.assertRaisesRegex(ReleaseError, "sdk-ci failed.*https://example.test/check"):
+            wait_for_ci(github, "example/moi-python-sdk", "abc123")
 
 
 class VersionTest(unittest.TestCase):

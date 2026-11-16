@@ -439,3 +439,7 @@ compatibility fallback.
 The route returns a streamed CSV response. The calling Python HTTP client owns
 the response stream and must consume and close it. This repository change does
 not add a Python SDK method, modify SDK version metadata, or publish a package.
+
+## Release train validation
+
+Documentation-only change for the v0.1.1 sandbox release.
