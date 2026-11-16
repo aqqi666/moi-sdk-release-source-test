@@ -1,0 +1,45 @@
+name: SDK CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sdk-ci:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Check module metadata
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          go mod edit -json | jq -e '.Replace == null or (.Replace | length == 0)'
+      - name: Run SDK tests
+        run: go test -p=2 ./...
+      - name: Build SDK packages
+        run: go build ./...
+      - name: Build an independent consumer
+        run: |
+          MODULE=$(go list -m)
+          mkdir "$RUNNER_TEMP/consumer"
+          cd "$RUNNER_TEMP/consumer"
+          go mod init consumer
+          go mod edit -require="$MODULE@v0.0.0" -replace="$MODULE=$GITHUB_WORKSPACE"
+          printf 'package main\n\nimport _ "%s"\n\nfunc main() {}\n' "$MODULE" > main.go
+          go mod tidy
+          go build .

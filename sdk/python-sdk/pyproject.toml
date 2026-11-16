@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moi-product-sdk"
+version = "0.1.0"
+description = "MOI product-level SDK"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["protobuf>=6.31.1,<7", "websocket-client>=1.8,<2", "websockets>=15,<16"]
+license = { text = "Proprietary" }
+authors = [{ name = "Matrixflow" }]
+
+[tool.setuptools.packages.find]
+include = ["moi_product_sdk*"]
+exclude = ["legacy*", "tests*"]
